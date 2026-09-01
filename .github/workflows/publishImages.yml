@@ -1,0 +1,71 @@
+name: Publish container images
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - main
+    types:
+      - completed
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-images-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+env:
+  FRONTEND_IMAGE: ghcr.io/sosnovichivan/relayform-frontend
+  BACKEND_IMAGE: ghcr.io/sosnovichivan/relayform-backend
+  SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  publish:
+    name: Publish images
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out successful commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - name: Build production images
+        run: |
+          set -euo pipefail
+          docker build \
+            --label "org.opencontainers.image.revision=${SOURCE_SHA}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --tag "${FRONTEND_IMAGE}:sha-${SOURCE_SHA}" \
+            --tag "${FRONTEND_IMAGE}:main" \
+            .
+          docker build \
+            --file apps/api/Dockerfile \
+            --label "org.opencontainers.image.revision=${SOURCE_SHA}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --tag "${BACKEND_IMAGE}:sha-${SOURCE_SHA}" \
+            --tag "${BACKEND_IMAGE}:main" \
+            .
+      - name: Publish production images
+        run: |
+          set -euo pipefail
+          docker push "${FRONTEND_IMAGE}:sha-${SOURCE_SHA}"
+          docker push "${FRONTEND_IMAGE}:main"
+          docker push "${BACKEND_IMAGE}:sha-${SOURCE_SHA}"
+          docker push "${BACKEND_IMAGE}:main"
+      - name: Record published references
+        run: |
+          {
+            echo "## Published images"
+            echo
+            echo "- \`${FRONTEND_IMAGE}:sha-${SOURCE_SHA}\`"
+            echo "- \`${BACKEND_IMAGE}:sha-${SOURCE_SHA}\`"
+            echo
+            echo "Resolve and deploy the GHCR digest rather than the moving \`main\` tag."
+          } >> "${GITHUB_STEP_SUMMARY}"

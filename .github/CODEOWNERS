@@ -1,0 +1,5 @@
+# Every repository change requires the Relayform owner review.
+* @SosnovichIvan
+
+# Protect ownership and repository-policy configuration explicitly.
+/.github/ @SosnovichIvan

@@ -1,0 +1,5 @@
+import { expect, it, vi } from 'vitest';
+vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => ({ value: 'session' }) })) }));
+import { GET } from './route';
+it('loads forms for an encoded project', async () => { const request = vi.fn().mockResolvedValue(Response.json({ forms: [{ id: 'f1', projectId: 'p/1', name: 'Lead' }] })); vi.stubGlobal('fetch', request); expect(await (await GET(new Request('http://local'), { params: Promise.resolve({ projectId: 'p/1' }) })).json()).toMatchObject({ forms: [{ name: 'Lead' }] }); expect(request.mock.calls[0][0]).toContain('p%2F1'); });
+it('normalizes empty and failed form responses', async () => { vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({})).mockResolvedValueOnce(new Response('{}', { status: 404 })).mockResolvedValueOnce(new Response('{}', { status: 401 }))); const context = { params: Promise.resolve({ projectId: 'p1' }) }; expect(await (await GET(new Request('http://local'), context)).json()).toEqual({ forms: [] }); expect((await GET(new Request('http://local'), context)).status).toBe(404); expect((await GET(new Request('http://local'), context)).status).toBe(401); });

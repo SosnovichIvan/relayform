@@ -1,0 +1,10 @@
+'use client';
+import type { Destination, DestinationProvider } from '@/entities/destination';
+export type DestinationDraft = Partial<Pick<Destination, 'id' | 'status'>> & { provider: DestinationProvider; recipient: string };
+const providers: Array<{ id: DestinationProvider; label: string }> = [{ id: 'telegram', label: 'Telegram' }, { id: 'vk', label: 'VK' }, { id: 'max', label: 'MAX' }, { id: 'email', label: 'E-mail' }];
+export function DestinationSelector({ value, onChange }: { value: DestinationDraft[]; onChange: (value: DestinationDraft[]) => void }) {
+  const select = (provider: DestinationProvider) => onChange([...value, { provider, recipient: provider === 'email' ? '' : 'pending' }]);
+  const clear = (provider: DestinationProvider) => onChange(value.filter((item) => item.provider !== provider));
+  const update = (provider: DestinationProvider, recipient: string) => onChange(value.map((item) => item.provider === provider ? { ...item, recipient } : item));
+  return <div><p className="mb-2 text-sm font-medium">Куда отправлять сообщение</p><div className="flex flex-wrap gap-2">{providers.map(({ id, label }) => { const selected = value.find((item) => item.provider === id); const isServiceManaged = id !== 'email'; return selected ? <label className="flex min-w-56 items-center gap-2 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm" key={id}><span>{label}</span>{isServiceManaged ? <span className="flex-1 text-[var(--color-text-secondary)]">{id === 'vk' ? 'через сообщество' : 'через бота'} · {selected.status === 'active' ? 'подключён' : 'ожидает'}</span> : <input aria-label={`Данные для ${label}`} className="min-w-24 flex-1 bg-transparent outline-none" onChange={(event) => update(id, event.target.value)} placeholder="Получатель" type="email" value={selected.recipient} />}<button aria-label={`Очистить ${label}`} type="button" onClick={() => clear(id)}>×</button></label> : <button className="rounded-lg border border-[var(--color-border-default)] px-3 py-2 text-sm" type="button" key={id} onClick={() => select(id)}>{label} · выбрать</button>; })}</div></div>;
+}

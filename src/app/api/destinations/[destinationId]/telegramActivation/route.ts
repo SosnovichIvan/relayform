@@ -1,0 +1,3 @@
+import { authenticatedBackendRequest, stableError } from '@/shared/api/relayformBackend';
+
+export async function POST(_request: Request, context: { params: Promise<{ destinationId: string }> }) { const response = await authenticatedBackendRequest(`/v1/destinations/${encodeURIComponent((await context.params).destinationId)}/telegram-activation`, { method: 'POST' }); if (!response.ok) return Response.json({ error: response.status === 401 ? 'unauthorized' : stableError(response.status) }, { status: response.status }); const payload = await response.json() as { activationUrl: string; expiresAt: number }; return Response.json({ activationUrl: payload.activationUrl, expiresAt: payload.expiresAt }); }

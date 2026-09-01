@@ -1,0 +1,2 @@
+import { FormEditor } from '@/features/manageForm/ui/formEditor';
+export default async function CabinetFormPage({ searchParams }: { searchParams: Promise<{ projectId?: string; formId?: string }> }) { const { projectId = '', formId } = await searchParams; return <main className="min-h-screen p-4 sm:p-8"><div className="mx-auto max-w-6xl"><FormEditor projectId={projectId} formId={formId} /></div></main>; }

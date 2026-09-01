@@ -2,12 +2,21 @@
 .env
 .env.*
 !.env.example
+ops/deployConfig.env
+ops/localAppEnv.env
+ops/serviceTokens.env
+!ops/deployConfig.example.env
+!ops/localAppEnv.example.env
+!ops/serviceTokens.example.env
+!ops/appEnv.example.env
 
-# Dependencies and build output
+# Dependencies, builds and test output
 node_modules/
 dist/
 build/
 .next/
+coverage/
+*.tsbuildinfo
 
 # Logs and local tooling
 *.log

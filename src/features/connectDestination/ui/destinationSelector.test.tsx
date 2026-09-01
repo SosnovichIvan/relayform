@@ -1,0 +1,8 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { DestinationSelector, type DestinationDraft } from './destinationSelector';
+function Harness() { const [value, setValue] = useState<DestinationDraft[]>([]); return <DestinationSelector value={value} onChange={setValue} />; }
+describe('DestinationSelector', () => {
+  it('configures several providers independently', () => { render(<Harness />); fireEvent.click(screen.getByRole('button', { name: 'Telegram · выбрать' })); fireEvent.click(screen.getByRole('button', { name: 'VK · выбрать' })); fireEvent.click(screen.getByRole('button', { name: 'MAX · выбрать' })); fireEvent.click(screen.getByRole('button', { name: 'E-mail · выбрать' })); expect(screen.getAllByText(/через бота/)).toHaveLength(2); expect(screen.getByText(/через сообщество/)).toBeDefined(); expect(screen.queryByLabelText('Данные для VK')).toBeNull(); expect(screen.queryByLabelText('Данные для MAX')).toBeNull(); fireEvent.change(screen.getByLabelText('Данные для E-mail'), { target: { value: 'owner@example.ru' } }); expect((screen.getByLabelText('Данные для E-mail') as HTMLInputElement).value).toBe('owner@example.ru'); fireEvent.click(screen.getByLabelText('Очистить Telegram')); expect(screen.getByRole('button', { name: 'Telegram · выбрать' })).toBeDefined(); });
+  it('shows active Telegram and no unsupported channel', () => { render(<DestinationSelector value={[{ id: 'd1', provider: 'telegram', recipient: '1', status: 'active' }]} onChange={() => undefined} />); expect(screen.getByText(/подключён/)).toBeDefined(); expect(screen.queryByText('WhatsApp')).toBeNull(); });
+});

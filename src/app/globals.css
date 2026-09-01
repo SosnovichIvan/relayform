@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+:root { --color-bg-page: #f8f6f1; --color-bg-surface: #fffdfa; --color-text-primary: #211f1b; --color-text-secondary: #6c665c; --color-border-default: #ded9cf; --color-action-primary: #f4c400; --color-action-primary-hover: #dbae00; --color-status-danger: #d9544d; --color-email-light-bg: #fffdfa; --color-email-light-text: #211f1b; --color-email-dark-bg: #24211d; --color-email-dark-text: #f5f1e8; }
+:root[data-theme='dark'] { --color-bg-page: #171512; --color-bg-surface: #24211d; --color-text-primary: #f5f1e8; --color-text-secondary: #b8b1a5; --color-border-default: #454038; --color-action-primary: #ffd329; --color-action-primary-hover: #ffe06d; --color-status-danger: #ff8e82; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-bg-page); color: var(--color-text-primary); font-family: Arial, sans-serif; }
+a { color: inherit; text-decoration: none; }
+.emailPreview[data-email-theme='light'] { background: var(--color-email-light-bg); color: var(--color-email-light-text); }
+.emailPreview[data-email-theme='dark'] { background: var(--color-email-dark-bg); color: var(--color-email-dark-text); }

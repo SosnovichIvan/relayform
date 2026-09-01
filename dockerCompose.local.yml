@@ -1,0 +1,90 @@
+name: relayform-local
+
+services:
+  frontend:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE:-ops/localAppEnv.example.env}
+    environment:
+      PORT: 3000
+      RELAYFORM_API_URL: http://backend:3001
+    ports:
+      - "127.0.0.1:${APP_HTTP_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then(response=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE:-ops/localAppEnv.example.env}
+      - ${APP_TOKENS_FILE:-ops/serviceTokens.example.env}
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://relayform:${POSTGRES_PASSWORD:-relayform-local}@postgres:5432/relayform
+      RUN_DELIVERY_WORKER: "false"
+    ports:
+      - "127.0.0.1:${API_HTTP_PORT:-3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3001/ready').then(response=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["npm", "run", "worker"]
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE:-ops/localAppEnv.example.env}
+      - ${APP_TOKENS_FILE:-ops/serviceTokens.example.env}
+    environment:
+      DATABASE_URL: postgresql://relayform:${POSTGRES_PASSWORD:-relayform-local}@postgres:5432/relayform
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: relayform
+      POSTGRES_USER: relayform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-relayform-local}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgresLocalData:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relayform -d relayform"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  postgresLocalData:

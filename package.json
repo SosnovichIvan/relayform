@@ -1,0 +1,40 @@
+{
+  "name": "relayform",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "local:up": "docker compose -f dockerCompose.local.yml up --build --detach --wait --wait-timeout 180",
+    "local:down": "docker compose -f dockerCompose.local.yml down --remove-orphans",
+    "local:status": "docker compose -f dockerCompose.local.yml ps",
+    "local:logs": "docker compose -f dockerCompose.local.yml logs --follow",
+    "local:reset": "docker compose -f dockerCompose.local.yml down --volumes --remove-orphans",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwindcss": "latest"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.6",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "jsdom": "^29.1.1",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}
