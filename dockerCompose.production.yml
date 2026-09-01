@@ -1,0 +1,59 @@
+services:
+  frontend:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE}
+    environment:
+      PORT: ${APP_HTTP_PORT}
+      RELAYFORM_API_URL: http://backend:3001
+    ports:
+      - "127.0.0.1:${APP_HTTP_PORT}:3000"
+  backend:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE}
+      - ${APP_TOKENS_FILE}
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://relayform:${POSTGRES_PASSWORD}@postgres:5432/relayform
+      RUN_DELIVERY_WORKER: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["npm", "run", "worker"]
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE}
+      - ${APP_TOKENS_FILE}
+    environment:
+      DATABASE_URL: postgresql://relayform:${POSTGRES_PASSWORD}@postgres:5432/relayform
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: relayform
+      POSTGRES_USER: relayform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgresData:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relayform -d relayform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  postgresData:

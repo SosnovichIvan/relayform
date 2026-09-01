@@ -1,0 +1,73 @@
+# Relayform project context
+
+## Product
+
+Relayform receives lead-form events through a unified API, delivers notifications to Telegram, VK, MAX and e-mail, and supports e-mail/phone verification.
+
+Primary users: landing-page owners, sales/marketing teams and developers integrating forms.
+
+## Current technical direction
+
+The planned frontend stack is Next.js App Router, React, TypeScript and Tailwind CSS v4. The architecture follows FSD; see `../project-rules.md`.
+
+The repository contains a runnable Next.js frontend foundation: Landing, Login, Registration, Cabinet, form editor, persisted confirmation-email list/editor and `/api/health`. Login and registration call Fastify through same-origin Next.js BFF handlers; the backend session token is stored only in a seven-day `HttpOnly`, `SameSite=Lax` cookie and logout expires it. The cabinet loads persisted projects, forms and 30-day delivery statistics, supports first-project creation/project selection, confirmed form deletion, and loading/empty/retryable/unauthorized states. Four responsive semantic widgets show total/delivered/failed/queued counts; each form shows its own counts and wrapping provider breakdown. Project creation strips the backend API key before returning to browser code. Form create/edit persists an absolute HTTP(S) `siteUrl` and reconciles multiple Telegram/VK/MAX/e-mail destinations through authenticated BFF handlers. Telegram never asks for `chat_id`: a pending destination produces the existing one-time bot activation link. VK also has no recipient input: the editor displays a configured community link and 15-minute `/start <code>` command, then checks activation status without generic PATCH. MAX follows the same server-managed rule: the editor displays a 15-minute `max.ru/<bot>?start=<token>` link, and the protected `bot_started` webhook persists `user_id` before the browser status check completes. A pending e-mail destination sends a fixed ownership message through Relayform's Resend account; `/activate-email` consumes its 15-minute single-use token server-side and shows branded safe states. Changing a confirmed address resets it to pending.
+
+Confirmation e-mail templates are project-scoped and persist subject, plain-text body, light/dark preview theme and an absolute HTTP(S) post-confirmation redirect URL. The list supports project selection, create/edit and confirmed delete. The Relayform wordmark, confirmation CTA, structure and `relayform.ru` attribution are fixed and never accepted as tenant-provided HTML. On mobile the preview precedes a bounded scrollable field region; on desktop it occupies the right column.
+
+Websites can now request a confirmation through project-key protected `POST /v1/email-verifications` with an owned template, recipient and idempotency key. Relayform normalizes the address, applies an independent project rate limit, stores only the SHA-256 digest of a 15-minute token and sends fixed escaped Light/Dark HTML/plain text through the Relayform-owned Resend adapter. The safe response contains only verification ID/status. `POST /v1/email-verifications/confirm` atomically consumes a sent token once and returns the template redirect snapshot. `/verify-email` consumes server-side, redirects only to HTTP(S), and renders branded invalid/expired/used/unavailable states. Provider failure is currently synchronous and requires a new idempotency key; background e-mail retry and retention cleanup remain future work.
+
+The frontend server reads the internal `RELAYFORM_API_URL` (`http://localhost:3001` locally and `http://backend:3001` in production Compose); it is not a public browser environment variable. Cabinet composition lives in `widgets/cabinet` because Next.js 16 reserves `src/pages` for Pages Router and otherwise conflicts with `src/app/cabinet/page.tsx`. Server-only BFF handlers live outside the client authentication barrel so `next/headers` never enters the client dependency graph.
+
+Backend foundation is the separate `apps/api` Fastify workspace. It has health/readiness, session-based MVP authentication, owner-scoped projects/forms, recipient-only destinations, confirmation-template CRUD and idempotent delivery attempts. Public event intake requires a project API key and idempotency key, verifies destination ownership and enforces a configurable per-project fixed-window rate limit with `429`/`Retry-After`. The limiter is process-local and must become distributed before horizontal backend scaling. PostgreSQL migrations are applied before the API starts; when `DATABASE_URL` is present, identity data, submissions, delivery attempts and leased delivery jobs use PostgreSQL, and `/ready` checks that database without exposing connection errors. Event acceptance persists the submission, attempt and claimable job atomically. Isolated tests and database-free development use repositories implementing the same asynchronous contracts in memory. Request signatures and additional provider adapters remain future work.
+
+`GET /v1/delivery-attempts/:attemptId` is protected by the project API key and returns only an owned attempt's `id`, state and safe provider outcome metadata. Cross-project and unknown attempts share `404`; recipients, messages, destination IDs, idempotency keys and raw diagnostics are never returned. Session-protected delivery statistics return the same owner's fixed 30-day aggregates. The cabinet also loads at most 20 recent final failures with only attempt/form/provider/stable code/retryable/time fields. Owner-scoped replay accepts only a failed attempt, atomically resets its attempt budget and leases, returns it to the durable queue and records requester, project, previous safe code and attempt count in `delivery_replay_audit`. Concurrent or repeated replay cannot produce a second transition; public project API keys cannot invoke it.
+
+Implementation handoff is documented in `docs/frontendImplementationTask.md`, `docs/backendImplementationTask.md` and `.ai/sdd/initialImplementation.md`. The approved VPS baseline is `ops/deployVps.sh` with `ops/deployConfig.example.env`, `ops/serviceTokens.example.env`, Dockerfiles, production Compose and `docs/vpsDeployment.md`; it targets Ubuntu/Debian, Docker Compose, Nginx and Let's Encrypt. During MVP, Relayform-owned provider credentials live only in the separate non-versioned `APP_TOKENS_FILE` on the VPS and are injected into backend/worker by Compose. The administrator-facing issuance and rotation procedure is `docs/providerCredentialsGuide.md`.
+
+GitHub Actions CI runs three stable checks on pull requests and `main`: `Frontend`, `Backend` and `Deployment configuration`. The Node.js 24 jobs use the committed npm lockfile and enforce typecheck, lint, all four Vitest coverage thresholds and the production Next.js build; Compose is resolved from safe example env files without starting services. The workflow has only `contents: read`, does not receive application secrets, disables persisted checkout credentials, pins GitHub-authored actions to full verified release SHAs and cancels superseded runs per ref. Weekly Dependabot pull requests maintain those action pins. Branch protection should require all three check names; operational instructions are in `docs/continuousIntegration.md`.
+
+The local manual-test environment is `dockerCompose.local.yml`. `npm run local:up` builds and waits for the production frontend image, backend API, standalone worker and PostgreSQL; backend startup applies migrations before its readiness probe allows dependants to start. Frontend, backend and PostgreSQL bind only to loopback on default ports 3000, 3001 and 5433. Committed local example files contain no provider credentials; real delivery is opt-in through ignored `ops/serviceTokens.env`, which is injected only into backend and worker. Normal shutdown preserves the named database volume, while `npm run local:reset` explicitly deletes local test data. The smoke-test and troubleshooting contract is documented in `docs/localDockerTesting.md`.
+
+Repository governance targets both `main` and `develop`. GitHub CI runs for pull requests and pushes to either protected branch. The committed active ruleset payload requires current `Frontend`, `Backend` and `Deployment configuration` checks, an owner-reviewed pull request, resolved discussions and fresh approval; it restricts protected-ref updates, deletion and force pushes. `@SosnovichIvan` owns every path. The owner's only bypass mode is `pull_request`, allowing an owner-authored PR to merge without self-review while still prohibiting direct and forced pushes. A successful `main` CI run publishes exact-commit frontend/backend images to GHCR with the ephemeral `GITHUB_TOKEN`; worker reuses backend, and VPS deployment must resolve the commit tag to an immutable digest. Details are in `docs/repositoryGovernance.md`.
+
+Backend planning baseline: `docs/backendDeliveryContract.md` defines a provider-neutral submission, destination and delivery-attempt contract for Telegram, VK, MAX and e-mail. Relayform owns all provider credentials; a tenant configures and confirms only a recipient. Telegram and MAX connect through a bot-start flow, VK activates from first contact with the Relayform community, and e-mail requires ownership verification. The contract requires idempotent per-destination delivery, bounded retry and redacted diagnostics. Activation and delivery are implemented for all four MVP channels.
+
+The backend now contains a provider-neutral text transport contract and tested Telegram, VK, MAX and Resend e-mail adapters. They read only Relayform-owned runtime credentials, return provider receipt identifiers and classify network/rate-limit/temporary failures as retryable without exposing tokens or complete recipients; input/permission/provider rejections are terminal. Event intake accepts a normalized non-empty `message`, resolves only an active destination inside the authenticated project and creates an internal job containing provider/recipient/message while returning no recipient data. `TransportDeliveryWorker` leases PostgreSQL jobs with `FOR UPDATE SKIP LOCKED`, dispatches through an injected registry and durably records safe outcomes. Retryable failures are rescheduled with bounded exponential backoff and jitter for up to five attempts; permanent or exhausted failures become final and can now be replayed manually through the audited owner-only cabinet flow. Expired leases make abandoned work claimable again. Production Compose disables polling in Fastify and runs a private standalone worker with the provider token file, database access, a referenced non-overlapping poll timer and graceful signal shutdown. Database-free development and tests retain the API-local poller by default. Telegram/VK/MAX are registered only when their service tokens are present; e-mail requires both `EMAIL_PROVIDER_API_KEY` and `EMAIL_FROM_ADDRESS`. All four destination activation flows are implemented.
+
+## Design direction
+
+Figma: https://www.figma.com/design/7og3GTemXBpGB3jZcQdxRe/relayform
+
+The Foundations page contains the current visual system:
+
+- warm neutral base for surfaces and typography;
+- yellow for primary actions;
+- coral for danger, warning and rare emphasis;
+- light and dark themes;
+- Inter type ramp: hero 56/64, H1 40/48, H2 28/36, body 16/24, small/label 14/20.
+
+Use semantic CSS roles, not literal colors. Refer to the Figma Variables and `.ai/project-rules.md`.
+
+The product's primary promise is fast delivery of feedback and lead-form data from a website into a chosen channel: Telegram, VK, MAX or e-mail. E-mail and phone verification is an optional secondary capability.
+
+The user selected the visual direction that previously started as **Verification first**, but its content must now express the full product. `01 • Landing` currently contains:
+
+- the compact `B / Verification first` reference;
+- a complete 1440 px Light desktop landing;
+- an equivalent 1440 px Dark desktop landing.
+
+The landing explains form delivery first, with e-mail/phone confirmation in the benefits. It uses a header, hero/demo, three-step flow, benefits, final CTA and footer. The hero has one primary CTA and no secondary `Как это работает →` link.
+
+Responsive Figma references are available at 390 px in Light and Dark for the landing. Login and Registration Light/Dark desktop/mobile references now live on `01 • Landing`; the previous `02 • Dashboard` page was removed.
+
+`02 • Cabinet` contains Light/Dark desktop design contracts for: connected-form overview (destinations, 30-day delivery statistics and edit/delete affordances), form creation/editing with destination selection, confirmation-email template list, and a template editor with subject, body, fixed confirmation button and post-confirmation redirect URL. Authentication, projects, forms, destinations, delivery statistics and confirmation-template CRUD are now connected through the BFF; Telegram, VK, MAX and e-mail activation are connected. The earlier `Signal flow` direction was removed.
+
+Cabinet screens are grouped as a readable 2×2 scenario grid per theme: form overview, form settings, email-template list and email editor. Each scenario now has a 390 px mobile reference in Light and Dark: a compact top bar with two-item navigation, a stacked statistics overview, compact card actions and single-column editors with a full-width primary action. In form setup, an unselected service is a badge; the selected service becomes a neutral configuration input with a visible `×` control that returns it to a badge. The selected input uses the same readable surface family as ordinary fields, never the primary-action soft fill. The integration-specific fields remain intentionally unspecified. Structural layout frames never carry default white fills; surfaces are expressed only through semantic color roles so the Dark theme remains coherent.
+
+The confirmation-email editor now includes a visual preview in Light and Dark, desktop and mobile. The preview keeps a fixed Relayform structure — wordmark, confirmation CTA and attribution/footer link `relayform.ru` — while theme and message copy can vary. On desktop it is a right-hand column; on mobile it is fixed above a dedicated vertically scrollable editing region containing the fields and save action. The landing URL is a product placeholder until a production domain is confirmed.
+
+## Working agreements
+
+- Use SDD for substantial work; create a specification before implementation.
+- User feedback that changes a durable convention is added to `decisions.md` and the relevant skill/rule.
+- The project is intentionally at the foundation stage; do not invent backend providers, pricing or UI flows without a specification.
